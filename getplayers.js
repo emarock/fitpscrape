@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import fetch, { AbortError } from 'node-fetch'
 import PQueue from 'p-queue'
 import Debug from 'debug'
 
@@ -6,7 +6,9 @@ const debug = new Debug('getplayers')
 const queue = new PQueue({
   concurrency: 5
 })
-const url = 'https://dp-fit-prod-function.azurewebsites.net/api/v6/players/list'
+//const url = 'https://dp-fit-prod-function.azurewebsites.net/api/v6/players/list'
+
+const url = 'https://dp-myfit-prod-function.azurewebsites.net/api/v1/tesserati/list'
 
 const letters = 'abcdefghijklmnopqrstuvxwyz\''.split('')
 //const letters = 'abc\''.split('')
@@ -30,36 +32,40 @@ async function retrieve(term) {
     "sortcolumn": null,
     "sortorder": null
   }
-  const response = await fetch(url, {
-    method: 'post',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/plain, */*'
-    },
-    body: JSON.stringify(body)
-  })
 
-  if (response.status == 200) {
-    try {
+  try {
+    const response = await fetch(url, {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      signal: AbortSignal.timeout(10000),
+      body: JSON.stringify(body)
+    })
+
+    if (response.status == 200) {
       const body = await response.json()
       debug(`retrieved ${body.giocatori.length} players for ${term}`)
       body.giocatori.forEach((player) => {
         players[player.Id] = player
       })
-    } catch (err) {
+    } else {
+      debug(`unexpected response code: ${response.status}`)
+    }
+  } catch (err) {
+    if (err instanceof AbortError) {
+      letters.forEach((letter) => {
+        if (term.match(/^[a-z]+$/) || letter.match(/^[a-z]$/)) {
+          debug(`adding retriever for ${term + letter}`)
+          queue.add(async function() {
+            await retrieve(term + letter)
+          })
+        }
+      })
+    } else {
       debug(`retrieved 0 players for ${term}`)
     }
-  } else if (response.status == 400) {
-    letters.forEach((letter) => {
-      if (term.match(/^[a-z]+$/) || letter.match(/^[a-z]$/)) {
-        debug(`adding retriever for ${term + letter}`)
-        queue.add(async function() {
-          await retrieve(term + letter)
-        })
-      }
-    })
-  } else {
-    debug(`unhandled response code ${response.status}`)
   }
 }
 

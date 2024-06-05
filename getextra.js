@@ -1,13 +1,16 @@
 import fetch from 'node-fetch'
 import PQueue from 'p-queue'
 import Debug from 'debug'
-import players from './data/players.json' assert {type: 'json'}
+import _ from 'lodash'
+import data from './data/players.json' assert {type: 'json'}
 
 const debug = new Debug('getextra')
 const queue = new PQueue({
-  concurrency: 5
+  concurrency: 20
 })
-const url = 'https://dp-fit-prod-function.azurewebsites.net/api/v6/player/sheet/simple'
+//const url = 'https://dp-fit-prod-function.azurewebsites.net/api/v6/player/sheet/simple'
+
+const url = 'https://dp-myfit-prod-function.azurewebsites.net/api/v1/tesserati/dettaglio/semplice'
 
 const maxRetries = 3
 
@@ -33,7 +36,6 @@ async function retrieve(player, retry) {
     const info = await response.json()
     debug(`retrieved player ${player.Id}`)
     player.cl = info.player['tennis_club_name']
-    players[player.Id] = player
   } catch (err) {
     debug(`request failed for ${player.Id}`)
     retry = (retry || 0) + 1
@@ -53,6 +55,8 @@ async function retrieve(player, retry) {
 
 (async function () {
 
+  // const players = _.pick(data, _.slice(_.keys(data), 0, 10))
+  const players = data
   for (let id in players) {
     debug(`queuing retriever for ${id}`)
     queue.add(async function () {
